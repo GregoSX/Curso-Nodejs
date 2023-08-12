@@ -1,0 +1,6 @@
+npm install -g lodash
+
+Alguns pacotes precisam do arquivos para serem utilizados no script, como o lodash. 
+Então é necessário realizar o link dos arquivos que estão na máquina para o diretório do projeto.
+
+npm link lodash
