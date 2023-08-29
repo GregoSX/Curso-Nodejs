@@ -1,0 +1,136 @@
+const express = require('express');
+const exphbs = require('express-handlebars');
+const conn = require('./db/conn');
+
+const User = require('./models/User');
+const Address = require('./models/Address');
+
+const app = express();
+
+// CONFIGURANDO O HANDLEBARS
+app.engine('handlebars', exphbs.engine());
+app.set('view engine', 'handlebars');
+
+// CONFIGURANDO ARQUIVOS ESTÁTICOS
+app.use(express.static('public'));
+
+// CONFIGURANDO O BODY PARSER
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+
+// ROTA PARA CARREGAR O FORMULÁRIO DE CADASTRO DE USUÁRIO
+app.get('/users/create', (req, res) => {
+    res.render('addUser');
+});
+
+// ROTA PARA CADASTRAR USUÁRIO  
+app.post('/users/create', async (req, res) => {
+    const { name, occupation } = req.body;
+    let { newsletter } = req.body;
+
+    if(newsletter === 'on') {
+        newsletter = true;
+    }
+
+    await User.create({name, occupation, newsletter})
+
+    res.redirect('/');
+});
+
+// ROTA PARA LISTAR UM USUÁRIO
+app.get('/users/:id', async (req, res) => {
+    const { id } = req.params;
+
+    // const user = await User.findOne({raw: true, where: {id}});
+    const user = await User.findByPk(id, {raw: true});
+
+    res.render('userView', { user });
+});
+
+// ROTA PARA EXCLUIR UM USUÁRIO
+app.post('/users/delete/:id', async (req, res) => {
+    const { id } = req.params;
+
+    await User.destroy({where: {id}});
+
+    res.redirect('/');
+});
+
+// ROTA PARA CARREGAR O FORMULÁRIO DE EDIÇÃO DE USUÁRIO
+app.get('/users/edit/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // Incluir o endereço do usuário
+        const user = await User.findByPk(id, {include: Address});
+
+        // Como agora nao usamos o raw, precisamos acessar o método get() para pegar os dados
+        // e ativar o método plain() para transformar em um objeto simples
+        res.render('editUser', { user: user.get({plain: true}) });
+    } catch (error) { 
+        console.log('Erro ao buscar usuário:', error);
+    }
+});
+
+// ROTA PARA EDITAR UM USUÁRIO
+app.post('/users/edit', async (req, res) => {
+    const { id, name, occupation } = req.body;
+    let { newsletter } = req.body;
+
+    if(newsletter === 'on') {
+        newsletter = true;
+    } else {
+        newsletter = false;
+    }
+
+    const userData = {
+        id,
+        name,
+        occupation,
+        newsletter
+    }
+
+    await User.update(userData, {where: {id}});
+
+    res.redirect('/');
+});
+
+// ROTA PARA ADICIONAR UM ENDEREÇO A UM USUÁRIO
+app.post('/address/create', async (req, res) => {
+    const { UserId, street, number, city } = req.body;
+
+    const address = {
+        UserId,
+        street,
+        number,
+        city
+    }
+
+    await Address.create(address);
+
+    res.redirect('/users/edit/' + UserId);
+});
+
+// ROTA PADRÃO, COM A LISTAGEM DE USUÁRIOS
+app.get('/', async (req, res) => {
+    // O raw: true faz com que o retorno seja apenas um array de objetos, 
+    // sem as informações adicionais do Sequelize
+    const users = await User.findAll({raw: true});
+
+    res.render('home', { users });
+});
+
+// EVITA DE QUE A APLICAÇÃO FUNCIONE SEM AS TABELAS SEREM CRIADAS
+conn
+    // O force: true FAZ COM QUE A TABELA SEJA REESCRITA, CASO ELA JÁ EXISTA - USADO PARA TESTES
+    // FAZ SENTIDO USAR QUANDO INSERIMOS NOVAS COLUNAS NA TABELA OU FAZEMOS RELACIONAMENTOS ENTRE TABELAS
+    // E QUERRIAMOS RESETAR A APLICAÇÃO
+    // .sync({force: true})
+    .sync()
+    .then(() => {
+        app.listen(3000, () => {
+            console.log('Servidor rodando na porta 3000!');
+        });
+    }).catch((error) => {
+        console.log('Não foi possível conectar ao banco de dados:', error);
+    });
